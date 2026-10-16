@@ -1,0 +1,8 @@
+---
+- name: Configure localhost for embedded development
+  hosts: localhost
+  connection: local
+  become: true
+
+  roles:
+    - role: embedded_development

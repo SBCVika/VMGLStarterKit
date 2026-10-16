@@ -1,0 +1,10 @@
+---
+arm_gnu_toolchain_version: 15.3.rel1
+arm_gnu_toolchain_archive: >-
+  arm-gnu-toolchain-{{ arm_gnu_toolchain_version }}-x86_64-arm-none-eabi.tar.xz
+arm_gnu_toolchain_url: >-
+  https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/{{ arm_gnu_toolchain_version }}/{{ arm_gnu_toolchain_archive }}
+arm_gnu_toolchain_checksum: >-
+  sha256:563bebb2b97d53382b956d6ee1fe61e2cae26699901417234a37df505ef9b5fa
+arm_gnu_toolchain_install_dir: >-
+  /home/user/.local/share/arm-gnu-toolchain-{{ arm_gnu_toolchain_version }}-x86_64-arm-none-eabi

@@ -1,0 +1,168 @@
+---
+- name: Add the existing user to the hardware access groups
+  ansible.builtin.user:
+    name: user
+    groups:
+      - dialout
+      - plugdev
+    append: true
+
+- name: Install development tools and APT prerequisites
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - ca-certificates
+      - cmake
+      - git
+      - minicom
+      - ninja-build
+      - openocd
+      - python3-debian
+      - wireshark
+      - xz-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the Microsoft repository signing key
+  ansible.builtin.get_url:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    dest: /etc/apt/keyrings/packages.microsoft.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add the Visual Studio Code repository
+  ansible.builtin.deb822_repository:
+    name: vscode
+    types:
+      - deb
+    uris:
+      - https://packages.microsoft.com/repos/code
+    suites:
+      - stable
+    components:
+      - main
+    architectures:
+      - amd64
+      - arm64
+      - armhf
+    signed_by: /etc/apt/keyrings/packages.microsoft.asc
+    state: present
+
+- name: Install Visual Studio Code
+  ansible.builtin.apt:
+    name: code
+    state: present
+    update_cache: true
+
+- name: List installed Visual Studio Code extensions
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/code
+      - --list-extensions
+  become_user: user
+  environment:
+    HOME: /home/user
+  register: vscode_extensions
+  changed_when: false
+
+- name: Install the C/C++ Extension Pack for Visual Studio Code
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/code
+      - --install-extension
+      - ms-vscode.cpptools-extension-pack
+  become_user: user
+  environment:
+    HOME: /home/user
+  when: "'ms-vscode.cpptools-extension-pack' not in vscode_extensions.stdout_lines"
+
+- name: Install MCU-Debug for Visual Studio Code
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/code
+      - --install-extension
+      - mcu-debug.mcu-debug
+      - --pre-release
+  become_user: user
+  environment:
+    HOME: /home/user
+  when: "'mcu-debug.mcu-debug' not in vscode_extensions.stdout_lines"
+
+- name: Install the ST-Link tools and udev rules
+  ansible.builtin.apt:
+    name: stlink-tools
+    state: present
+  notify: Reload udev rules
+
+- name: Check the architecture for the Arm GNU Toolchain
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] == "x86_64"
+    fail_msg: The Arm GNU Toolchain archive configured by this role requires x86_64.
+
+- name: Create the user toolchain directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: user
+    group: user
+    mode: "0755"
+  loop:
+    - /home/user/.cache/embedded-development
+    - /home/user/.local/bin
+    - /home/user/.local/share
+
+- name: Add the user-local bin directory to Bash PATH
+  ansible.builtin.lineinfile:
+    path: /home/user/.bashrc
+    line: 'export PATH="$HOME/.local/bin:$PATH"'
+    create: true
+    owner: user
+    group: user
+    mode: "0644"
+
+- name: Download the Arm GNU Toolchain
+  ansible.builtin.get_url:
+    url: "{{ arm_gnu_toolchain_url }}"
+    dest: "/home/user/.cache/embedded-development/{{ arm_gnu_toolchain_archive }}"
+    checksum: "{{ arm_gnu_toolchain_checksum }}"
+    owner: user
+    group: user
+    mode: "0644"
+
+- name: Install the Arm GNU Toolchain
+  ansible.builtin.unarchive:
+    src: "/home/user/.cache/embedded-development/{{ arm_gnu_toolchain_archive }}"
+    dest: /home/user/.local/share
+    remote_src: true
+    owner: user
+    group: user
+    creates: "{{ arm_gnu_toolchain_install_dir }}"
+
+- name: Find the Arm GNU Toolchain executables
+  ansible.builtin.find:
+    paths: "{{ arm_gnu_toolchain_install_dir }}/bin"
+    patterns: arm-none-eabi-*
+    file_type: file
+  register: arm_gnu_toolchain_executables
+
+- name: Link the Arm GNU Toolchain executables into the user PATH
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: "/home/user/.local/bin/{{ item.path | basename }}"
+    state: link
+    owner: user
+    group: user
+  loop: "{{ arm_gnu_toolchain_executables.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
