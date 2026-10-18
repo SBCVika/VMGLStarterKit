@@ -18,11 +18,17 @@
       - ninja-build
       - openocd
       - python3-debian
+      - snapd
       - wireshark
       - xz-utils
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: Install MQTT Explorer
+  community.general.snap:
+    name: mqtt-explorer
+    state: present
 
 - name: Create the APT keyring directory
   ansible.builtin.file:
